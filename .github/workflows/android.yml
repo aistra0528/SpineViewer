@@ -1,0 +1,29 @@
+name: Android CI
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      - name: Build with Gradle
+        run: |
+          echo "commit=$(echo ${{ github.sha }} | cut -c-7)" >> $GITHUB_ENV
+          ./gradlew android:assembleRelease
+      - name: Upload a Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpineViewer@${{ env.commit }}
+          path: android/build/outputs/apk/release/*.apk

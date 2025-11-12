@@ -103,8 +103,7 @@ class Main(val platform: Platform) : ApplicationAdapter(), GestureListener {
         if (currentFile.isNotEmpty() && x > 128) {
             skeletonData?.run {
                 if (skins.count() > 1) {
-                    skinIndex += 1
-                    if (skinIndex >= skins.count()) skinIndex = 0
+                    skinIndex = (skinIndex + 1) % skins.count()
                     skeleton?.run {
                         setSkin(skins[skinIndex])
                         setSlotsToSetupPose()
@@ -121,8 +120,7 @@ class Main(val platform: Platform) : ApplicationAdapter(), GestureListener {
     override fun longPress(x: Float, y: Float): Boolean {
         skeletonData?.run {
             if (animations.count() > 1) {
-                animationIndex += 1
-                if (animationIndex >= animations.count()) animationIndex = 0
+                animationIndex = (animationIndex + 1) % animations.count()
                 state?.run {
                     setAnimation(0, animations[animationIndex], true)
                     return true
