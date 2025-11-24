@@ -2,20 +2,25 @@ package org.anonymous.spineviewer
 
 import com.badlogic.gdx.ApplicationAdapter
 import com.badlogic.gdx.Gdx
+import com.badlogic.gdx.graphics.OrthographicCamera
 import com.badlogic.gdx.graphics.Texture
-import com.badlogic.gdx.graphics.g2d.PolygonSpriteBatch
 import com.badlogic.gdx.graphics.g2d.TextureAtlas
 import com.badlogic.gdx.input.GestureDetector
 import com.badlogic.gdx.input.GestureDetector.GestureListener
 import com.badlogic.gdx.math.Vector2
+import com.badlogic.gdx.math.Vector3
 import com.badlogic.gdx.math.Vector4
 import com.badlogic.gdx.utils.ScreenUtils
+import com.badlogic.gdx.utils.viewport.ScreenViewport
 import com.esotericsoftware.spine.*
+import com.esotericsoftware.spine.utils.TwoColorPolygonBatch
 import java.lang.Math.clamp
 
 /** [com.badlogic.gdx.ApplicationListener] implementation shared by all platforms.  */
 class Main(val platform: Platform) : ApplicationAdapter(), GestureListener {
-    private lateinit var batch: PolygonSpriteBatch
+    private lateinit var batch: TwoColorPolygonBatch
+    private lateinit var camera: OrthographicCamera
+    private lateinit var viewport: ScreenViewport
     private lateinit var renderer: SkeletonRenderer
     private var skeleton: Skeleton? = null
     private var skeletonData: SkeletonData? = null
@@ -29,35 +34,38 @@ class Main(val platform: Platform) : ApplicationAdapter(), GestureListener {
 
     override fun create() {
         Gdx.input.inputProcessor = GestureDetector(this)
-        batch = PolygonSpriteBatch()
+        batch = TwoColorPolygonBatch()
+        camera = OrthographicCamera()
+        viewport = ScreenViewport()
         renderer = SkeletonRenderer()
     }
 
     override fun render() {
         ScreenUtils.clear(0.15f, 0.15f, 0.2f, 1f)
-        val vec = Vector4.Zero
-        backgroundTexture?.run {
+        backgroundTexture?.let {
+            batch.projectionMatrix.set(viewport.camera.combined)
+            val vec = Vector4.Zero
             val scale = maxOf(
-                Gdx.graphics.width / width.toFloat(), Gdx.graphics.height / height.toFloat()
+                Gdx.graphics.width / it.width.toFloat(), Gdx.graphics.height / it.height.toFloat()
             )
-            vec.z = width * scale
-            vec.w = height * scale
+            vec.z = it.width * scale
+            vec.w = it.height * scale
             vec.x = (Gdx.graphics.width - vec.z) / 2f
             vec.y = (Gdx.graphics.height - vec.w) / 2f
+            batch.begin()
+            batch.draw(it, vec.x, vec.y, vec.z, vec.w)
+            batch.end()
         }
         skeleton?.let {
+            camera.update()
+            batch.projectionMatrix.set(camera.combined)
             state?.run {
                 update(Gdx.graphics.deltaTime)
                 apply(it)
             }
-            it.bones.forEach { b -> b.updateWorldTransform() }
+            it.updateWorldTransform()
             batch.begin()
-            backgroundTexture?.let { bg -> batch.draw(bg, vec.x, vec.y, vec.z, vec.w) }
             renderer.draw(batch, it)
-            batch.end()
-        } ?: backgroundTexture?.let {
-            batch.begin()
-            batch.draw(it, vec.x, vec.y, vec.z, vec.w)
             batch.end()
         }
     }
@@ -65,6 +73,12 @@ class Main(val platform: Platform) : ApplicationAdapter(), GestureListener {
     override fun dispose() {
         batch.dispose()
         backgroundTexture?.dispose()
+    }
+
+    override fun resize(width: Int, height: Int) {
+        camera.viewportWidth = width.toFloat()
+        camera.viewportHeight = height.toFloat()
+        viewport.update(width, height, true)
     }
 
     override fun resume() {
@@ -76,8 +90,10 @@ class Main(val platform: Platform) : ApplicationAdapter(), GestureListener {
                 skeletonData = if (currentFile.endsWith(".skel")) SkeletonBinary(atlas).readSkeletonData(handle)
                 else SkeletonJson(atlas).readSkeletonData(handle)
                 skeletonData?.let {
+                    camera.reset()
                     skeleton = Skeleton(it).apply {
-                        reset()
+                        animationIndex = 0
+                        skinIndex = 0
                         setSkin(it.skins[skinIndex])
                         setSlotsToSetupPose()
                     }
@@ -135,7 +151,8 @@ class Main(val platform: Platform) : ApplicationAdapter(), GestureListener {
     }
 
     override fun pan(x: Float, y: Float, deltaX: Float, deltaY: Float): Boolean = skeleton?.let {
-        it.setPosition(it.x + deltaX, it.y - deltaY)
+        camera.position.x -= deltaX * camera.zoom
+        camera.position.y += deltaY * camera.zoom
         true
     } ?: false
 
@@ -146,7 +163,7 @@ class Main(val platform: Platform) : ApplicationAdapter(), GestureListener {
     override fun zoom(initialDistance: Float, distance: Float): Boolean {
         skeleton?.run {
             val scale = clamp(lastScale * distance / initialDistance, 0.5f, 8f)
-            setScale(scale, scale)
+            camera.zoom = 1 / scale
         }
         return false
     }
@@ -158,16 +175,12 @@ class Main(val platform: Platform) : ApplicationAdapter(), GestureListener {
     }
 
     override fun pinchStop() {
-        skeleton?.run {
-            lastScale = scaleX
-        }
+        lastScale = 1 / camera.zoom
     }
 
-    private fun Skeleton.reset() {
-        setPosition(Gdx.graphics.width / 2f, Gdx.graphics.height / 2f)
+    private fun OrthographicCamera.reset() {
         lastScale = 1f
-        setScale(lastScale, lastScale)
-        animationIndex = 0
-        skinIndex = 0
+        zoom = 1 / lastScale
+        position.set(Vector3.Zero)
     }
 }
