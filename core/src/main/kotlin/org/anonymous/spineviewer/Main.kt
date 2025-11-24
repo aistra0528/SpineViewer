@@ -50,7 +50,7 @@ class Main(val platform: Platform) : ApplicationAdapter(), GestureListener {
                 update(Gdx.graphics.deltaTime)
                 apply(it)
             }
-            it.updateWorldTransform()
+            it.bones.forEach { b -> b.updateWorldTransform() }
             batch.begin()
             backgroundTexture?.let { bg -> batch.draw(bg, vec.x, vec.y, vec.z, vec.w) }
             renderer.draw(batch, it)
